@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NOBA - Acceso Biométrico</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* Estilos para la Toolbar Multimedia y Mensajes */
+        .chat-toolbar {
+            display: flex;
+            background: rgba(255, 255, 255, 0.07);
+            padding: 8px 15px;
+            gap: 15px;
+            border-top: 1px solid rgba(74, 144, 226, 0.2);
+        }
+        .tool-icon {
+            color: #b0b0b0;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: 0.3s;
+            background: none;
+            border: none;
+        }
+        .tool-icon:hover {
+            color: #4a90e2; 
+            transform: translateY(-2px);
+        }
+        .sticker-msg { font-size: 2.5rem; display: block; margin: 5px 0; animation: bounce 0.5s; }
+        @keyframes bounce { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.2); } }
+        .file-msg { 
+            background: rgba(74, 144, 226, 0.1); 
+            border: 1px dashed #4a90e2; 
+            padding: 8px; 
+            border-radius: 8px; 
+            font-size: 0.8rem; 
+            color: #fff;
+        }
+        /* Canvas para dibujo de MediaPipe sobre el video */
+        #output_canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <img src="{{ url_for('static', filename='img/loguito.png') }}" alt="Logo NOBA" class="logo">
+        <a href="{{ url_for('login_page') }}" class="btn-register-nav">REGÍSTRATE</a>
+    </nav>
+
+    <header class="hero">
+        <div class="hero-content">
+            <p class="subtitle">BIENVENIDO A NOBA</p>
+            <h1>Sistema de <br>Servicios Generales</h1>
+            <p class="description">
+                Conecta con expertos verificados de forma rápida y segura mediante validación avanzada.
+            </p>
+        </div>
+
+        <div class="login-panel">
+            <h3 style="margin-top: 0;">Gestión de Acceso</h3>
+            <div class="camera-frame" style="position: relative;">
+                <div class="face-placeholder" id="placeholder">👤</div>
+                <video id="webcam" autoplay playsinline style="display: none; width: 100%; height: 100%; object-fit: cover;"></video>
+                <canvas id="output_canvas"></canvas>
+            </div>
+
+            <button class="btn-access" onclick="startScan()">INICIAR RECONOCIMIENTO</button>
+            <button class="btn-login-manual" onclick="location.href='{{ url_for('login_page') }}'">INICIAR SESIÓN</button>
+
+            <a href="#" class="link-alt">¿Olvidó su contraseña?</a>
+        </div>
+    </header>
+
+    <div id="alert-access" class="custom-alert">
+        <span class="alert-icon">✔</span>
+        <span class="alert-text">Acceso Concedido</span>
+    </div>
+
+    <div id="chatbot-container">
+        <div id="chat-window" class="chat-hidden">
+            <div class="chat-header">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <img src="{{ url_for('static', filename='img/logochatbot.png') }}" style="width: 25px; filter: drop-shadow(0 0 5px #4a90e2);">
+                    <span style="font-weight: bold; font-size: 0.9rem;">Asistente NOBA IA</span>
+                </div>
+                <button onclick="toggleChat()" style="background:none; border:none; color:white; font-size:1.5rem; cursor:pointer;">&times;</button>
+            </div>
+
+            <div class="chat-body" id="chat-content">
+                <div class="bot-msg">Sistemas biométricos activos. ¿Deseas subir algún documento o enviarme un comando? 🤖</div>
+            </div>
+
+            <div class="chat-toolbar">
+                <label class="tool-icon" title="Subir Archivo">
+                    <i class="fas fa-paperclip"></i>
+                    <input type="file" style="display:none" onchange="handleFile(this)">
+                </label>
+                <button class="tool-icon" title="Enviar Sticker" onclick="sendSticker('🚀')"><i class="fas fa-rocket"></i></button>
+                <button class="tool-icon" title="Nota de Voz" onclick="alert('Micrófono activado...')"><i class="fas fa-microphone"></i></button>
+                <button class="tool-icon" title="Emojis" onclick="sendSticker('✨')"><i class="fas fa-smile"></i></button>
+            </div>
+
+            <div class="chat-footer">
+                <input type="text" id="user-input" placeholder="Escribe un mensaje..." onkeypress="handleChatKey(event)">
+                <button onclick="sendMessage()" style="background:none; border:none; color:#4a90e2; cursor:pointer;">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+
+        <button id="chat-trigger" onclick="toggleChat()">
+            <img src="{{ url_for('static', filename='img/logochatbot.png') }}" alt="IA Logo" class="chatbot-trigger-logo">
+        </button>
+    </div>
+
+    <script type="module">
+        import { FaceDetector, FilesetResolver, DrawingUtils } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest";
+
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('output_canvas');
+        const ctx = canvas.getContext('2d');
+        const placeholder = document.getElementById('placeholder');
+        const alerta = document.getElementById('alert-access');
+        let faceDetector;
+        let detectionCounter = 0;
+
+        // Inicializar MediaPipe
+        async function init() {
+            const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm");
+            faceDetector = await FaceDetector.createFromOptions(vision, {
+                baseOptions: {
+                    modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite`,
+                    delegate: "GPU"
+                },
+                runningMode: "VIDEO"
+            });
+        }
+
+        // Función de escaneo vinculada al botón
+        window.startScan = async function() {
+            try {
+                const constraints = { video: { width: 1280, height: 720 } };
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                video.style.display = "block";
+                placeholder.style.display = "none";
+                video.addEventListener("loadeddata", predictLoop);
+            } catch (err) {
+                alert("Error al acceder a la cámara.");
+            }
+        };
+
+        async function predictLoop() {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const detections = await faceDetector.detectForVideo(video, performance.now());
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const drawingUtils = new DrawingUtils(ctx);
+
+            if (detections.detections.length > 0) {
+                const confidence = detections.detections[0].categories[0].score;
+                
+                if (confidence > 0.6) {
+                    drawingUtils.drawLandmarks(detections.detections[0].keypoints, { color: '#00FF00', radius: 4 });
+                    detectionCounter++;
+                    
+                    if (detectionCounter >= 30) {
+                        alerta.classList.add('visible');
+                        video.srcObject.getTracks().forEach(track => track.stop());
+
+                        fetch('/login_facial', { method: 'POST' })
+                            .then(() => {
+                                setTimeout(() => { window.location.href = "/dashboard"; }, 2000);
+                            });
+                        return; 
+                    }
+                }
+            } else {
+                detectionCounter = 0;
+            }
+            window.requestAnimationFrame(predictLoop);
+        }
+
+        init();
+    </script>
+
+    <script>
+        /* LÓGICA DEL CHATBOT */
+        function toggleChat() {
+            document.getElementById('chat-window').classList.toggle('chat-hidden');
+        }
+
+        function handleChatKey(e) {
+            if (e.key === 'Enter') sendMessage();
+        }
+
+        function handleFile(input) {
+            if (input.files[0]) {
+                const content = document.getElementById('chat-content');
+                content.innerHTML += `
+                    <div style="text-align:right; margin-bottom:10px;">
+                        <div class="file-msg"><i class="fas fa-file-upload"></i> ${input.files[0].name}</div>
+                    </div>`;
+                setTimeout(() => botReply("Archivo recibido. Analizando datos..."), 800);
+            }
+        }
+
+        function sendSticker(emoji) {
+            const content = document.getElementById('chat-content');
+            content.innerHTML += `<div style="text-align:right; margin-bottom:10px;"><span class="sticker-msg">${emoji}</span></div>`;
+            content.scrollTop = content.scrollHeight;
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('user-input');
+            const content = document.getElementById('chat-content');
+            if (input.value.trim() !== "") {
+                content.innerHTML += `<div style="text-align:right; margin-bottom:10px; color:#4a90e2; font-weight:bold; font-size:0.8rem;">Tú: ${input.value}</div>`;
+                const text = input.value.toLowerCase();
+                input.value = "";
+                setTimeout(() => {
+                    let r = "Procesando consulta en la nube NOBA...";
+                    if(text.includes("hola")) r = "¡Saludos! Soy la unidad robótica de soporte NOBA.";
+                    botReply(r);
+                }, 600);
+            }
+        }
+
+        function botReply(text) {
+            const content = document.getElementById('chat-content');
+            content.innerHTML += `<div class="bot-msg">${text}</div>`;
+            content.scrollTop = content.scrollHeight;
+        }
+    </script>
+</body>
+</html>

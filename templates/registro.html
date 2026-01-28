@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>NOBA | Registro Dark Tech</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/registro.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+
+    <video autoplay muted loop id="bg-video">
+        <source src="{{ url_for('static', filename='video/serviciosregistro.mp4') }}" type="video/mp4">
+    </video>
+
+    <div class="glass-card">
+        <img src="{{ url_for('static', filename='img/logoSimbolo.png') }}" style="width: 60px; margin-bottom: 10px;">
+        <h2 style="color: var(--azul-electrico); margin-bottom: 30px; letter-spacing: 2px;">REGISTRATE</h2>
+        
+        <form action="/registro" method="POST">
+            <div class="form-group">
+                <input type="email" name="email" placeholder="Email" required>
+            </div>
+            <div class="form-group">
+                <input type="password" name="password" placeholder="Password" required>
+            </div>
+            <div class="form-group">
+                <input type="password" name="confirm" placeholder="Repite password" required>
+            </div>
+
+            <label class="checkbox-group">
+                <input type="checkbox" required>
+                <span>He leído y acepto los términos y privacy policy</span>
+            </label>
+
+            <button type="submit" class="btn-noba">REGISTRARSE</button>
+        </form>
+
+        <div style="margin-top: 30px;">
+            <p style="font-size: 0.7rem; color: var(--gris-texto); margin-bottom: 15px;">Registrarse con</p>
+            <div class="social-icons">
+                <a href="#"><i class="fab fa-facebook"></i></a>
+                <a href="#"><i class="fab fa-twitter"></i></a>
+                <a href="#"><i class="fab fa-google"></i></a>
+            </div>
+            <p style="margin-top: 20px; font-size: 0.8rem;">
+    ¿Ya tienes cuenta? <a href="/" style="color: var(--azul-electrico); text-decoration: none; font-weight: bold;">Inicia sesión</a>
+</p>
+        </div>
+    </div>
+
+</body>
+</html>
