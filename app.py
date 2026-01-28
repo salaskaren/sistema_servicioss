@@ -1,6 +1,13 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 import mysql.connector
 import bcrypt
+from flask import Flask, render_template
+
+
+@app.route("/")
+def home():
+    return render_template("index.html")
+
 
 app = Flask(__name__)
 app.secret_key = 'clave_secreta_noba_2026'
